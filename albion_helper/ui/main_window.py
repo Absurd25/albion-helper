@@ -2,8 +2,9 @@
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QComboBox, QApplication
+    QLabel, QLineEdit, QPushButton, QComboBox, QApplication, QMessageBox
 )
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QImage, QIcon
 import os
@@ -357,14 +358,6 @@ class AlbionHelperMainWindow(QWidget):
     def find_and_save_food_effect(self):
         from modules.screenshot_handler import find_image_difference
 
-        if not hasattr(self, 'img1') or not hasattr(self, 'img2'):
-            self.status_label.setText("❌ Не все скриншоты загружены")
-            return
-
-        if self.img1 is None or self.img2 is None:
-            self.status_label.setText("❌ Один из скриншотов пуст")
-            return
-
         boxes, result_img = find_image_difference(self.img1, self.img2)
         if not boxes:
             self.status_label.setText("❌ Не удалось обнаружить эффект от еды.")
@@ -373,12 +366,20 @@ class AlbionHelperMainWindow(QWidget):
         # Сохраняем результат сравнения
         result_path = os.path.join(self.temp_dir, "food_diff.png")
         cv2.imwrite(result_path, result_img)
-        self.status_label.setText("🔍 Обнаружен эффект от еды. Подтвердите сохранение.")
 
+        # Отображаем изображение результата в превью (опционально)
+        h, w = result_img.shape[:2]
+        resized_result = resize_image(result_img, 400, 200)
+        q_img = QImage(resized_result.data, resized_result.shape[1], resized_result.shape[0],
+                       resized_result.strides[0], QImage.Format_BGR888)
+        pixmap = QPixmap.fromImage(q_img)
+        self.image_preview.setPixmap(pixmap)
+
+        # Предлагаем пользователю сохранить
         reply = QMessageBox.question(
             self,
             "Сохранить эффект?",
-            f"Обнаружена {len(boxes)} область(и) изменений. Сохранить как темплейт?",
+            f"Обнаружена {len(boxes)} область(и) изменения. Сохранить как темплейт?",
             QMessageBox.Yes | QMessageBox.No
         )
 
@@ -389,87 +390,69 @@ class AlbionHelperMainWindow(QWidget):
             food_w = w
             food_h = h
 
-            # Сохраняем как темплейт еды
             self.save_food_template(food_x, food_y, food_w, food_h, label="Эффект еды")
-
-            # Сохраняем в базу данных
             self.save_template_data(food_x, food_y, food_w, food_h, "Эффект еды")
 
-            # Сохраняем как последний найденный эффект еды
-            self.last_food_effect = {
-                "x": food_x,
-                "y": food_y,
-                "width": food_w,
-                "height": food_h,
-                "label": "Эффект еды"
-            }
-            self.status_label.setText("✅ Эффект еды сохранён как авто-темплейт")
+            self.status_label.setText("✅ Эффект еды сохранён")
 
     def start_auto_food_mode(self):
+        """
+        Начинает автоматический режим поиска эффекта еды.
+        """
         try:
             self.x = int(self.x_input.text())
             self.y = int(self.y_input.text())
             self.width = int(self.width_input.text())
             self.height = int(self.height_input.text())
         except ValueError:
-            self.status_label.setText("⚠️ Введите корректные числа")
+            self.status_label.setText("⚠️ Введите корректные значения X/Y/W/H")
             return
 
-        # Проверка: не нулевые ли значения
-        if self.width <= 0 or self.height <= 0:
-            self.status_label.setText("⚠️ Ширина и высота должны быть больше 0")
+        # Подтверждение первого скриншота
+        reply = QMessageBox.question(
+            self,
+            "Сделайте скриншот",
+            "Сейчас будет сделан первый скриншот (без еды).\nУбедитесь, что еда не активна.\nНажмите 'OK', чтобы продолжить.",
+            QMessageBox.Ok | QMessageBox.Cancel
+        )
+
+        if reply == QMessageBox.Ok:
+            self.take_first_screenshot()
+
+    def take_first_screenshot(self):
+        self.status_label.setText("📸 Делаю первый скриншот (без еды)")
+        self.img1 = capture_screen(self.x, self.y, self.width, self.height)
+
+        if self.img1 is None:
+            self.status_label.setText("❌ Не удалось сделать первый скриншот.")
             return
 
-        # Проверка: не выходят ли за пределы экрана
-        from mss import mss
-        with mss() as sct:
-            monitor = sct.monitors[0]  # главный монитор
-            if self.x + self.width > monitor["width"] or self.y + self.height > monitor["height"]:
-                self.status_label.setText("❌ Область выходит за пределы экрана")
-                return
+        cv2.imwrite(os.path.join(self.temp_dir, "before_food.png"), self.img1)
 
-        self.take_first_screenshot()
+        # Сообщаем пользователю, что нужно съесть еду
+        reply = QMessageBox.question(
+            self,
+            "Съешьте еду",
+            "Теперь съешьте еду и нажмите OK, чтобы сделать второй скриншот.",
+            QMessageBox.Ok | QMessageBox.Cancel
+        )
 
-    def start_auto_food_mode(self):
-        try:
-            self.x = int(self.x_input.text())
-            self.y = int(self.y_input.text())
-            self.width = int(self.width_input.text())
-            self.height = int(self.height_input.text())
-        except ValueError:
-            self.status_label.setText("⚠️ Введите корректные числа")
-            return
-
-        # Проверка: не нулевые ли значения
-        if self.width <= 0 or self.height <= 0:
-            self.status_label.setText("⚠️ Ширина и высота должны быть больше 0")
-            return
-
-        # Проверка: не выходят ли за пределы экрана
-        from mss import mss
-        with mss() as sct:
-            monitor = sct.monitors[0]  # главный монитор
-            if self.x + self.width > monitor["width"] or self.y + self.height > monitor["height"]:
-                self.status_label.setText("❌ Область выходит за пределы экрана")
-                return
-
-        self.take_first_screenshot()
+        if reply == QMessageBox.Ok:
+            self.take_second_screenshot()
 
     def take_second_screenshot(self):
-        import time
+        self.status_label.setText("⏳ Жду 5 секунд после еды...")
         time.sleep(5)  # Ждём 5 секунд
 
-        self.status_label.setText("📸 Второй скриншот (с едой)")
-        self.logger.info("📸 Второй скриншот (с едой)")
-
+        self.status_label.setText("📸 Делаю второй скриншот (с едой)")
         self.img2 = capture_screen(self.x, self.y, self.width, self.height)
 
         if self.img2 is None:
-            self.status_label.setText("❌ Не удалось сделать второй скриншот")
-            self.logger.error("❌ Не удалось сделать второй скриншот")
+            self.status_label.setText("❌ Не удалось сделать второй скриншот.")
             return
 
         cv2.imwrite(os.path.join(self.temp_dir, "after_food.png"), self.img2)
+
         self.find_and_save_food_effect()
 
     def disable_food_mode(self):
