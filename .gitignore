@@ -1,0 +1,42 @@
+# Byte-compiled / optimized / DLL files
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Distribution / build
+/dist
+/build
+/*.spec
+
+# Virtual environments
+/venv
+/env
+/ENV
+
+# PyInstaller
+#  (use a virtualenv and avoid including this folder)
+__pycache__
+*.log
+*.tmp
+
+# IDEs and editors
+/.idea
+/.vscode
+*.swp
+*.swo
+
+# Data / logs / temp
+*.db
+*.sqlite
+*.json.tmp
+*.bak
+*.csv
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# User-specific config (optional)
+/config/local_settings.py
