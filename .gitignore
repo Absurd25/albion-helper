@@ -40,3 +40,6 @@ Thumbs.db
 
 # User-specific config (optional)
 /config/local_settings.py
+
+# file
+read_json.py

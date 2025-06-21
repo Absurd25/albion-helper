@@ -16,7 +16,7 @@ import logging
 # Импорт модулей
 from modules.screenshot_handler import capture_screen
 from modules.image_comparer import find_image_difference
-
+from modules.template_generator import save_effect_template
 
 def resource_path(relative_path):
     """ Для корректного поиска ресурсов внутри .exe """
@@ -34,6 +34,8 @@ class AlbionHelperMainWindow(QWidget):
         self.setWindowTitle("Albion Helper — Template Creator")
         self.setWindowIcon(QIcon(resource_path("resources/icon.ico")))
         self.resize(800, 600)
+
+        self.name_input = None
 
         # === Переменные для авто-хавки ===
         self.auto_food_active = False
@@ -78,6 +80,8 @@ class AlbionHelperMainWindow(QWidget):
             "Шлем (D)"
         ])
 
+        self.region_combo.currentIndexChanged.connect(self.on_region_changed)
+
         self.x_input = QLineEdit()
         self.y_input = QLineEdit()
         self.width_input = QLineEdit()
@@ -89,6 +93,10 @@ class AlbionHelperMainWindow(QWidget):
         coords_group.addLayout(self.create_row("Y:", self.y_input))
         coords_group.addLayout(self.create_row("Ширина:", self.width_input))
         coords_group.addLayout(self.create_row("Высота:", self.height_input))
+
+        coords_group.addWidget(QLabel("Имя темплейта:"))
+        self.name_input = QLineEdit()
+        coords_group.addLayout(self.create_row("", self.name_input))
 
         control_layout.addWidget(self.region_label)
         control_layout.addWidget(self.region_combo)
@@ -138,6 +146,7 @@ class AlbionHelperMainWindow(QWidget):
 
         self.add_food_template_button = QPushButton("💾 Добавить авто-темплейт еды")
         self.add_food_template_button.clicked.connect(self.start_add_food_template_mode)
+        self.save_template_button.clicked.connect(self.save_template)
 
         button_layout.addWidget(self.save_region_button)
         button_layout.addWidget(self.save_template_button)
@@ -210,33 +219,48 @@ class AlbionHelperMainWindow(QWidget):
         reply = QMessageBox.question(
             self,
             "Добавить авто-темплейт еды",
-            "Убедитесь, что еда ещё не активна\nНажмите OK, чтобы сделать первый скриншот",
+            "Убедитесь, что еда ещё не активна.\nНажмите OK, чтобы сделать первый скриншот.",
             QMessageBox.Ok | QMessageBox.Cancel
         )
+        if reply != QMessageBox.Ok:
+            return
 
-        if reply == QMessageBox.Ok:
-            self.first_screenshot = capture_screen(x, y, width, height)
-            if self.first_screenshot is None:
-                self.status_label.setText("❌ Не удалось сделать первый скриншот")
-                return
+        # Первый скриншот
+        self.first_screenshot = capture_screen(x, y, width, height)
+        if self.first_screenshot is None:
+            self.status_label.setText("❌ Не удалось сделать первый скриншот")
+            return
 
-            reply = QMessageBox.question(
-                self,
-                "Съешьте еду",
-                "Теперь съешьте еду и нажмите OK,\nчтобы сделать второй скриншот через 5 секунд",
-                QMessageBox.Ok | QMessageBox.Cancel
-            )
+        reply = QMessageBox.information(
+            self,
+            "Съешьте еду",
+            "Теперь съешьте еду и нажмите OK,\nчтобы сделать второй скриншот через 5 секунд.",
+            QMessageBox.Ok | QMessageBox.Cancel
+        )
+        if reply != QMessageBox.Ok:
+            return
 
-            if reply == QMessageBox.Yes:
-                self.second_screenshot_timer = QTimer.singleShot(5000, lambda: self.make_second_screenshot(x, y, width, height))
+        # Таймер для второго скриншота
+        self.status_label.setText("⏳ Ожидание 5 секунд перед вторым скриншотом...")
+        QTimer.singleShot(5000, lambda: self.make_second_screenshot(x, y, width, height))
 
     def make_second_screenshot(self, x, y, width, height):
+        self.status_label.setText("📸 Делаю второй скриншот...")
         second_img = capture_screen(x, y, width, height)
+
         if second_img is None:
             self.status_label.setText("❌ Не удалось сделать второй скриншот")
             return
 
-        boxes, result_img = find_image_difference(self.first_screenshot, second_img)
+        self.status_label.setText("🔍 Сравниваю изображения...")
+
+        try:
+            boxes, result_img = find_image_difference(self.first_screenshot, second_img)
+        except Exception as e:
+            self.status_label.setText(f"❌ Ошибка сравнения изображений: {e}")
+            logging.error(f"Ошибка при сравнении изображений: {e}")
+            return
+
         if not boxes:
             self.status_label.setText("❌ Эффект от еды не найден")
             return
@@ -248,7 +272,6 @@ class AlbionHelperMainWindow(QWidget):
             f"Обнаружено {len(boxes)} изменений. Сохранить как темплейт?",
             QMessageBox.Yes | QMessageBox.No
         )
-
         if reply == QMessageBox.Yes:
             food_x = x + boxes[0][0]
             food_y = y + boxes[0][1]
@@ -257,14 +280,21 @@ class AlbionHelperMainWindow(QWidget):
 
             self.save_food_template(food_x, food_y, food_w, food_h, label="Эффект еды")
             self.status_label.setText("✅ Темплейт еды создан")
+        else:
+            self.status_label.setText("🚫 Темплейт не сохранён")
 
     def save_food_template(self, x, y, width, height, label="Эффект еды"):
-        food_dir = "data/templates/food"
+        food_dir = os.path.join("data", "templates", "food")
         os.makedirs(food_dir, exist_ok=True)
+
         filename = f"effect_{label.lower().replace(' ', '_')}_{width}x{height}.png"
         full_path = os.path.join(food_dir, filename)
 
         food_image = capture_screen(x, y, width, height)
+        if food_image is None:
+            self.status_label.setText("❌ Не удалось захватить область еды для сохранения")
+            return
+
         cv2.imwrite(full_path, food_image)
 
         template_file = os.path.join(food_dir, "food_templates.json")
@@ -293,7 +323,7 @@ class AlbionHelperMainWindow(QWidget):
             with open(template_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4, ensure_ascii=False)
 
-        self.status_label.setText(f"🍱 Темплейт '{label}' сохранён")
+        self.status_label.setText(f"🍱 Темплейт '{label}' сохранён в {template_file}")
         self.food_area = {"x": x, "y": y, "width": width, "height": height}
 
     def toggle_auto_eat(self):
