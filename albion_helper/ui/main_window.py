@@ -41,7 +41,7 @@ class AlbionHelperMainWindow(QWidget):
     def __init__(self, logger=None):
         super().__init__()
         self.logger = logger or logging.getLogger("AlbionHelperLogger")
-        self.setWindowTitle("Albion Helper — Template Creator")
+        self.setWindowTitle("Albion Helper — Main menu")
         self.start_time = datetime.now()
         self.template_1_path = ""
         self.template_2_path = ""
@@ -504,28 +504,6 @@ class AlbionHelperMainWindow(QWidget):
         if "change_" in filename:
             return 0, 0, 80, 80  # Пример, замени на реальные данные при необходимости
         return 0, 0, 80, 80
-
-    def add_last_food_template_to_db(self):
-        if self.last_food_effect is None:
-            self.status_label.setText("⚠️ Нет последнего эффекта для сохранения")
-            return
-
-        x = self.last_food_effect["x"]
-        y = self.last_food_effect["y"]
-        width = self.last_food_effect["width"]
-        height = self.last_food_effect["height"]
-        label = self.last_food_effect["label"]
-
-        success = self.save_template_data(x, y, width, height, label)
-        if success:
-            self.status_label.setText(f"✅ Эффект '{label}' добавлен в базу данных")
-        else:
-            self.status_label.setText("⚠️ Эффект с таким именем уже существует")
-
-    def disable_food_mode(self):
-        self.food_mode_active = False
-        self.food_mode_label.setText("🍱 Режим еды: выключен")
-        self.food_mode_label.setStyleSheet("font-weight: bold; color: gray;")
 
     def load_settings(self):
         config_path = resource_path(os.path.join("config", "settings.json"))

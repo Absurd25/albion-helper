@@ -1,59 +1,93 @@
+# ui/auto_food_mode_window.py
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QPushButton, QMessageBox, QCheckBox, QApplication
+    QPushButton, QMessageBox, QApplication, QDialog
 )
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QPixmap, QImage
+from PyQt5.QtGui import QPixmap, QImage, QFont
 import cv2
-import os
-import numpy as np
 import json
 import pyautogui
+import os
+import numpy as np
 
 from modules.screenshot_handler import capture_screen
 from utils.logger import setup_logger
+from utils.paths import TEMPLATES_DIR
 
-class AutoFoodModeWindow(QWidget):
+
+class AutoFoodModeWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Авто-режим: Еда")
+        self.setWindowTitle("Albion Helper — Авто-режим: Еда")
         self.resize(600, 400)
 
+        # Логгер
         self.logger = setup_logger()
+
+        # Состояние режима
         self.running = False
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_preview)
 
-        # Пути
-        self.food_templates = self.load_food_templates()
-
-        # Получаем координаты из settings.json
+        # Настройки
         self.settings = self.load_settings()
         self.effects_rect = self.settings.get("Область эффектов персонажа", {})
-        self.helmet_slot_rect = self.settings.get("Шлем (D)", {})
+        self.food_slot_rect = self.settings.get("Слот еды", {})
 
+        # Инициализация интерфейса
         self.init_ui()
+
+        # Первое обновление превью
+        self.update_preview()
+
+        # Таймер обновления области
+        self.preview_timer = QTimer(self)
+        self.preview_timer.timeout.connect(self.update_preview)
+        self.preview_timer.start(500)  # Каждые 500 мс
+
+    def load_settings(self):
+        config_path = os.path.join("config", "settings.json")
+        if not os.path.exists(config_path):
+            return {}
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            self.logger.error(f"Ошибка чтения settings.json: {e}")
+            return {}
 
     def init_ui(self):
         main_layout = QVBoxLayout()
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
-        # === Превью области ===
-        preview_layout = QHBoxLayout()
-
+        # === Заголовок: Область эффектов (на 10% больше и зафиксировано сверху) ===
         self.effects_label = QLabel("Область эффектов:")
+        font = self.effects_label.font()
+        font.setPointSize(int(font.pointSize() * 1.1))  # Увеличиваем на 10%
+        font.setBold(True)
+        self.effects_label.setFont(font)
+        self.effects_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # Зафиксировано сверху
+
+        # === Превью областей (зафиксированные размеры) ===
+        preview_layout = QHBoxLayout()
+        preview_layout.setSpacing(20)
+
+        # --- Область эффектов ---
         self.effects_preview = QLabel()
+        self.effects_preview.setFixedSize(220, 120)  # Фиксированный размер
         self.effects_preview.setStyleSheet("background-color: #f0f0f0; border: 1px solid black;")
         self.effects_preview.setAlignment(Qt.AlignCenter)
 
-        self.helmet_label = QLabel("Слот шлема (D):")
-        self.helmet_preview = QLabel()
-        self.helmet_preview.setStyleSheet("background-color: #f0f0f0; border: 1px solid black;")
-        self.helmet_preview.setAlignment(Qt.AlignCenter)
+        # --- Область еды ---
+        self.food_preview = QLabel()
+        self.food_preview.setFixedSize(220, 120)  # Фиксированный размер
+        self.food_preview.setStyleSheet("background-color: #f0f0f0; border: 1px solid black;")
+        self.food_preview.setAlignment(Qt.AlignCenter)
 
-        preview_layout.addWidget(self.effects_preview, stretch=1)
-        preview_layout.addWidget(self.helmet_preview, stretch=1)
+        preview_layout.addWidget(self.effects_preview)
+        preview_layout.addWidget(self.food_preview)
 
         # === Статус режима ===
         self.status_label = QLabel("Авто-прохватка: ❌ Выключен")
@@ -71,7 +105,7 @@ class AutoFoodModeWindow(QWidget):
         control_layout.addWidget(self.toggle_button)
         control_layout.addWidget(close_button)
 
-        # === Сборка ===
+        # === Сборка основного layout ===
         main_layout.addWidget(self.effects_label)
         main_layout.addLayout(preview_layout)
         main_layout.addWidget(self.status_label)
@@ -79,81 +113,43 @@ class AutoFoodModeWindow(QWidget):
 
         self.setLayout(main_layout)
 
-    def load_settings(self):
-        config_path = os.path.join("config", "settings.json")
-        if not os.path.exists(config_path):
-            return {}
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            self.logger.error(f"Ошибка чтения settings.json: {e}")
-            return {}
-
-    def load_food_templates(self):
-        food_dir = os.path.join("../data/data", "templates", "food")
-        template_file = os.path.join(food_dir, "food_templates.json")
-
-        if not os.path.exists(template_file):
-            return []
-
-        try:
-            with open(template_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return [os.path.join(food_dir, item["template"]) for item in data]
-        except Exception as e:
-            self.logger.error(f"Ошибка загрузки шаблонов еды: {e}")
-            return []
-
     def update_preview(self):
-        if not self.effects_rect or not self.helmet_slot_rect:
+        if not self.effects_rect or not self.food_slot_rect:
             return
 
-        # === Скриншоты ===
-        x_e, y_e, w_e, h_e = self.effects_rect.values()
-        x_h, y_h, w_h, h_h = self.helmet_slot_rect.values()
+        try:
+            x_e = int(self.effects_rect.get("x", 0))
+            y_e = int(self.effects_rect.get("y", 0))
+            w_e = int(self.effects_rect.get("width", 100))
+            h_e = int(self.effects_rect.get("height", 100))
 
+            x_f = int(self.food_slot_rect.get("x", 0))
+            y_f = int(self.food_slot_rect.get("y", 0))
+            w_f = int(self.food_slot_rect.get("width", 100))
+            h_f = int(self.food_slot_rect.get("height", 100))
+        except (ValueError, TypeError) as e:
+            self.logger.error(f"❌ Ошибка значений: {e}")
+            return
+
+        # Делаем скриншоты
         img_effects = capture_screen(x_e, y_e, w_e, h_e)
-        img_helmet = capture_screen(x_h, y_h, w_h, h_h)
+        img_food = capture_screen(x_f, y_f, w_f, h_f)
 
-        # === Превью эффектов ===
-        effects_resized = cv2.resize(img_effects, (200, 100), interpolation=cv2.INTER_AREA)
+        if img_effects is None or img_food is None:
+            self.logger.warning("⚠️ Не удалось сделать скриншот для превью")
+            return
+
+        # Превью эффектов
+        effects_resized = cv2.resize(img_effects, (220, 120), interpolation=cv2.INTER_AREA)
         q_img_effects = QImage(effects_resized.data, effects_resized.shape[1], effects_resized.shape[0],
                                effects_resized.strides[0], QImage.Format_BGR888)
         self.effects_preview.setPixmap(QPixmap.fromImage(q_img_effects))
 
-        # === Превью шлема ===
-        helmet_resized = cv2.resize(img_helmet, (200, 100), interpolation=cv2.INTER_AREA)
-        q_img_helmet = QImage(helmet_resized.data, helmet_resized.shape[1], helmet_resized.shape[0],
-                              helmet_resized.strides[0], QImage.Format_BGR888)
-        self.helmet_preview.setPixmap(QPixmap.fromImage(q_img_helmet))
-
-        # === Логика авто-режима ===
-        if self.running:
-            found_food = False
-            for template_path in self.food_templates:
-                if not os.path.exists(template_path):
-                    continue
-
-                template = cv2.imread(template_path)
-                result = cv2.matchTemplate(img_effects, template, cv2.TM_CCOEFF_NORMED)
-                threshold = 0.8
-                loc = np.where(result >= threshold)
-                if len(loc[0]) > 0:
-                    found_food = True
-                    break
-
-            if not found_food:
-                # Проверяем наличие еды в слоте шлема
-                empty_template = cv2.imread(os.path.join("resources", "empty_helmet_slot.png"))
-                if empty_template is None:
-                    self.logger.warning("Не найден шаблон empty_helmet_slot.png")
-                    return
-
-                result = cv2.matchTemplate(img_helmet, empty_template, cv2.TM_CCOEFF_NORMED)
-                if result.max() < 0.7:  # Не пустой слот
-                    self.logger.info("Еда найдена в слоте шлема. Нажимаем 'D'")
-                    pyautogui.press('d')
+        # Превью слота еды
+        food_resized = cv2.resize(img_food, (220, 120), interpolation=cv2.INTER_AREA)
+        q_img_food = QImage(food_resized.data, food_resized.shape[1], food_resized.shape[0],
+                            food_resized.strides[0], QImage.Format_BGR888)
+        self.food_preview.setPixmap(QPixmap.fromImage(q_img_food))
 
     def toggle_auto_mode(self):
         self.running = not self.running
@@ -170,5 +166,45 @@ class AutoFoodModeWindow(QWidget):
 
     def closeEvent(self, event):
         self.timer.stop()
-        self.parent().disable_food_mode()
+        self.preview_timer.stop()
+        self.logger.info("Окно 'Авто-режим: Еда' закрыто")
         event.accept()
+
+    def update_preview(self):
+        if not self.effects_rect or not self.food_slot_rect:
+            return
+
+        try:
+            x_e = int(self.effects_rect.get("x", 0))
+            y_e = int(self.effects_rect.get("y", 0))
+            w_e = int(self.effects_rect.get("width", 100))
+            h_e = int(self.effects_rect.get("height", 100))
+
+            x_f = int(self.food_slot_rect.get("x", 0))
+            y_f = int(self.food_slot_rect.get("y", 0))
+            w_f = int(self.food_slot_rect.get("width", 100))
+            h_f = int(self.food_slot_rect.get("height", 100))
+        except (ValueError, TypeError) as e:
+            self.logger.error(f"❌ Ошибка значений: {e}")
+            return
+
+        # Делаем скриншоты
+        img_effects = capture_screen(x_e, y_e, w_e, h_e)
+        img_food = capture_screen(x_f, y_f, w_f, h_f)
+
+        if img_effects is None or img_food is None:
+            self.logger.warning("⚠️ Не удалось сделать скриншот для превью")
+            return
+
+        # Превью эффектов
+        effects_resized = cv2.resize(img_effects, (w_e, h_e), interpolation=cv2.INTER_AREA)
+        q_img_effects = QImage(effects_resized.data, effects_resized.shape[1], effects_resized.shape[0],
+                               effects_resized.strides[0], QImage.Format_BGR888)
+        self.effects_preview.setPixmap(QPixmap.fromImage(q_img_effects))
+
+        # Превью слота еды
+        food_resized = cv2.resize(img_food, (w_f, h_f), interpolation=cv2.INTER_AREA)
+        q_img_food = QImage(food_resized.data, food_resized.shape[1], food_resized.shape[0],
+                            food_resized.strides[0], QImage.Format_BGR888)
+        self.food_preview.setPixmap(QPixmap.fromImage(q_img_food))
+

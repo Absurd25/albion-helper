@@ -18,7 +18,7 @@ from utils.paths import TEMP_DIR, LOGS_DIR, TEMPLATES_DIR, EFFECT_TEMPLATES_JSON
 class FoodEffectPreviewWindow(QDialog):
     def __init__(self, image_path, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Предпросмотр эффекта еды")
+        self.setWindowTitle("Albion Helper — Предпросмотр эффекта еды")
         self.image_path = image_path
         self.parent = parent  # Чтобы получить x, y области
 

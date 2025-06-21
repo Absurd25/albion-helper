@@ -9,7 +9,7 @@ from utils.paths import ensure_directories
 from utils.logger import setup_logger
 
 import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="sip")
+# warnings.filterwarnings("ignore", category=DeprecationWarning, module="sip")
 
 
 def main():
