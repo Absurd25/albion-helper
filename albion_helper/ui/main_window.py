@@ -13,7 +13,7 @@ import cv2
 import numpy as np
 import logging
 import time
-
+from datetime import datetime
 import shutil
 import re
 
@@ -34,6 +34,7 @@ def resource_path(relative_path):
 class AlbionHelperMainWindow(QWidget):
     def __init__(self, logger=None):
         super().__init__()
+        self.start_time = datetime.now()
         self.logger = logger or logging.getLogger("AlbionHelperLogger")
         self.setWindowTitle("Albion Helper — Template Creator")
         self.setWindowIcon(QIcon(resource_path("resources/icon.ico")))
