@@ -5,27 +5,26 @@ import numpy as np
 
 
 def find_image_difference(img1, img2):
-    """
-    Сравнивает два изображения и возвращает координаты изменённых областей
-    """
+    """Сравнивает два изображения и возвращает координаты изменённых областей."""
     if img1 is None or img2 is None:
+        print("⚠️ Одно из изображений равно None")
         return [], None
 
-    # Конвертируем в градации серого
+    if img1.shape != img2.shape:
+        print("⚠️ Размеры изображений не совпадают")
+        return [], None
+
     gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
 
-    # Найдём разницу
     diff = cv2.absdiff(gray1, gray2)
     _, thresh = cv2.threshold(diff, 30, 255, cv2.THRESH_BINARY)
-
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    result_img = img1.copy()
+    result_img = img2.copy()  # Рисуем изменения на after_food.png
     bounding_boxes = []
 
     for contour in contours:
-        if cv2.contourArea(contour) > 100:  # игнорируем мелкие изменения
+        if cv2.contourArea(contour) > 100:
             x, y, w, h = cv2.boundingRect(contour)
             cv2.rectangle(result_img, (x, y), (x + w, y + h), (0, 255, 0), 2)
             bounding_boxes.append((x, y, w, h))

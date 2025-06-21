@@ -2,7 +2,7 @@
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QComboBox, QApplication, QMessageBox
+    QLabel, QLineEdit, QPushButton, QComboBox, QApplication, QMessageBox, QDialog
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap, QImage, QIcon
@@ -12,6 +12,10 @@ import json
 import cv2
 import numpy as np
 import logging
+import time
+
+import shutil
+import re
 
 # Импорт модулей
 from modules.screenshot_handler import capture_screen
@@ -219,7 +223,8 @@ class AlbionHelperMainWindow(QWidget):
         reply = QMessageBox.question(
             self,
             "Добавить авто-темплейт еды",
-            "Убедитесь, что еда ещё не активна.\nНажмите OK, чтобы сделать первый скриншот.",
+            "Убедитесь, что еда ещё не активна.\n"
+            "Нажмите OK, чтобы сделать первый скриншот.",
             QMessageBox.Ok | QMessageBox.Cancel
         )
         if reply != QMessageBox.Ok:
@@ -231,16 +236,20 @@ class AlbionHelperMainWindow(QWidget):
             self.status_label.setText("❌ Не удалось сделать первый скриншот")
             return
 
+        # Сохраняем первый скриншот во временную папку
+        first_path = os.path.join(self.temp_dir, "before_food.png")
+        cv2.imwrite(first_path, self.first_screenshot)
+
         reply = QMessageBox.information(
             self,
             "Съешьте еду",
-            "Теперь съешьте еду и нажмите OK,\nчтобы сделать второй скриншот через 5 секунд.",
+            "Теперь съешьте еду и нажмите OK,\n"
+            "чтобы сделать второй скриншот через 5 секунд.",
             QMessageBox.Ok | QMessageBox.Cancel
         )
         if reply != QMessageBox.Ok:
             return
 
-        # Таймер для второго скриншота
         self.status_label.setText("⏳ Ожидание 5 секунд перед вторым скриншотом...")
         QTimer.singleShot(5000, lambda: self.make_second_screenshot(x, y, width, height))
 
@@ -251,6 +260,10 @@ class AlbionHelperMainWindow(QWidget):
         if second_img is None:
             self.status_label.setText("❌ Не удалось сделать второй скриншот")
             return
+
+        # Сохраняем второй скриншот
+        second_path = os.path.join(self.temp_dir, "after_food.png")
+        cv2.imwrite(second_path, second_img)
 
         self.status_label.setText("🔍 Сравниваю изображения...")
 
@@ -265,31 +278,33 @@ class AlbionHelperMainWindow(QWidget):
             self.status_label.setText("❌ Эффект от еды не найден")
             return
 
-        # Предложить пользователю сохранить
-        reply = QMessageBox.question(
-            self,
-            "Сохранить темплейт?",
-            f"Обнаружено {len(boxes)} изменений. Сохранить как темплейт?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        if reply == QMessageBox.Yes:
-            food_x = x + boxes[0][0]
-            food_y = y + boxes[0][1]
-            food_w = boxes[0][2]
-            food_h = boxes[0][3]
+        # Сохраняем результат сравнения
+        diff_path = os.path.join(self.temp_dir, "food_diff.png")
 
-            self.save_food_template(food_x, food_y, food_w, food_h, label="Эффект еды")
-            self.status_label.setText("✅ Темплейт еды создан")
-        else:
-            self.status_label.setText("🚫 Темплейт не сохранён")
+        # Проверяем, что изображение не пустое
+        if result_img is None or result_img.size == 0:
+            self.status_label.setText("❌ Результат сравнения пустой")
+            return
 
-    def save_food_template(self, x, y, width, height, label="Эффект еды"):
-        food_dir = os.path.join("data", "templates", "food")
-        os.makedirs(food_dir, exist_ok=True)
+        cv2.imwrite(diff_path, result_img)
 
-        filename = f"effect_{label.lower().replace(' ', '_')}_{width}x{height}.png"
-        full_path = os.path.join(food_dir, filename)
+        # Отображаем предварительный просмотр
+        self.show_preview_window(diff_path)
 
+    def save_food_template(self, x, y, width, height, label="Эффект еды", user_name=None, save_dir=None):
+        """Сохраняет темплейт еды в указанную директорию."""
+        if save_dir is None:
+            save_dir = os.path.join("data", "templates", "food")
+        os.makedirs(save_dir, exist_ok=True)
+
+        # Получаем имя темплейта
+        if not user_name:
+            last_number = self.get_last_template_index()
+            user_name = f"темплейт_еды_{last_number + 1}"
+        filename = f"effect_{user_name}_{width}x{height}.png"
+        full_path = os.path.join(save_dir, filename)
+
+        # Делаем скриншот области и сохраняем
         food_image = capture_screen(x, y, width, height)
         if food_image is None:
             self.status_label.setText("❌ Не удалось захватить область еды для сохранения")
@@ -297,14 +312,15 @@ class AlbionHelperMainWindow(QWidget):
 
         cv2.imwrite(full_path, food_image)
 
-        template_file = os.path.join(food_dir, "food_templates.json")
+        # Сохраняем данные в JSON
+        template_file = os.path.join(save_dir, "food_templates.json")
         new_data = {
             "x": x,
             "y": y,
             "width": width,
             "height": height,
             "label": label,
-            "name": label.lower().replace(" ", "_"),
+            "name": user_name,
             "template": filename
         }
 
@@ -317,13 +333,13 @@ class AlbionHelperMainWindow(QWidget):
         else:
             data = []
 
-        exists = any(item["name"] == new_data["name"] for item in data)
+        exists = any(item["name"] == user_name for item in data)
         if not exists:
             data.append(new_data)
             with open(template_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4, ensure_ascii=False)
 
-        self.status_label.setText(f"🍱 Темплейт '{label}' сохранён в {template_file}")
+        self.status_label.setText(f"🍱 Темплейт '{user_name}' сохранён как {filename}")
         self.food_area = {"x": x, "y": y, "width": width, "height": height}
 
     def toggle_auto_eat(self):
@@ -461,3 +477,119 @@ class AlbionHelperMainWindow(QWidget):
                 json.dump(data, f, indent=4, ensure_ascii=False)
 
         self.status_label.setText(f"✅ Темплейт '{label}' сохранён в region_templates.json")
+
+    def filter_valid_boxes(self, boxes):
+        """Фильтрует области, которые похожи на прямоугольники."""
+        valid_boxes = []
+        for box in boxes:
+            x, y, w, h = box
+            contour = np.array([[x, y], [x + w, y], [x + w, y + h], [x, y + h]])
+            approx = cv2.approxPolyDP(contour, 0.04 * cv2.arcLength(contour, True), True)
+
+            # Если контур имеет более 4 точек, это не прямоугольник
+            if len(approx) > 4:
+                valid_boxes.append(box)
+
+        return valid_boxes
+
+    def show_preview_window(self, diff_image_path):
+        if not os.path.exists(diff_image_path):
+            self.status_label.setText("❌ Нет файла для отображения")
+            return
+
+        preview_dialog = QDialog(self)
+        layout = QVBoxLayout()
+
+        label = QLabel("🔍 Разница между изображениями:")
+        layout.addWidget(label)
+
+        # --- Загружаем изображение ---
+        pixmap = QPixmap(diff_image_path)
+        if pixmap.isNull():
+            self.status_label.setText("❌ Не удалось загрузить изображение")
+            preview_dialog.accept()
+            return
+
+        image_label = QLabel()
+        image_label.setPixmap(pixmap.scaledToWidth(600, Qt.SmoothTransformation))
+        image_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(image_label)
+
+        # --- Кнопки действий ---
+        button_layout = QHBoxLayout()
+        save_btn = QPushButton("💾 Сохранить как темплейт")
+        close_btn = QPushButton("❌ Закрыть")
+
+        save_btn.clicked.connect(lambda: self.save_food_template_from_preview(diff_image_path))
+        close_btn.clicked.connect(preview_dialog.accept)
+
+        button_layout.addWidget(save_btn)
+        button_layout.addWidget(close_btn)
+        layout.addLayout(button_layout)
+
+        preview_dialog.setLayout(layout)
+        preview_dialog.setWindowTitle("Превью: найденные изменения")
+        preview_dialog.resize(700, 500)
+        preview_dialog.exec_()
+
+    def save_food_template_from_preview(self, image_path):
+        if not os.path.exists(image_path):
+            self.status_label.setText("❌ Файл не существует")
+            return
+
+        try:
+            food_image = cv2.imread(image_path)
+            if food_image is None:
+                self.status_label.setText("❌ Не удалось загрузить изображение")
+                return
+
+            x, y, w, h = self.get_coords_from_filename(image_path)
+            self.save_food_template(x, y, w, h, label="Эффект еды", user_name=None)
+
+        except Exception as e:
+            self.status_label.setText(f"❌ Ошибка при сохранении темплейта: {e}")
+            logging.error(f"Ошибка при сохранении темплейта из превью: {e}")
+
+    def get_coordinates_from_image_path(self, image_path):
+        """Извлекает координаты из имени файла."""
+        filename = os.path.basename(image_path)
+        match = re.match(r"effect_([^_]+)_(\d+)x(\d+)\.png", filename)
+        if match:
+            name = match.group(1)
+            width = int(match.group(2))
+            height = int(match.group(3))
+            return self.food_area["x"], self.food_area["y"], width, height
+        raise ValueError("Неверное имя файла темплейта")
+
+    def move_to_blacklist(self, image_path):
+        """Перемещает файл в blacklist."""
+        blacklist_dir = os.path.join("data", "templates", "food", "blacklist")
+        os.makedirs(blacklist_dir, exist_ok=True)
+
+        filename = os.path.basename(image_path)
+        dest_path = os.path.join(blacklist_dir, filename)
+
+        try:
+            shutil.move(image_path, dest_path)
+            self.status_label.setText(f"🚫 Перемещено в blacklist: {dest_path}")
+        except Exception as e:
+            self.status_label.setText(f"❌ Ошибка перемещения в blacklist: {e}")
+
+    def get_coords_from_filename(self, path):
+        base_name = os.path.basename(path)
+        match = re.search(r'effect_([^_]+)_(\d+)x(\d+)\.png', base_name)
+
+        if match:
+            width = int(match.group(2))
+            height = int(match.group(3))
+            return self.x, self.y, width, height  # используем текущие координаты области
+
+        # Если не нашли имя из файла — попробуй взять из поля ввода
+        try:
+            x = int(self.x_input.text())
+            y = int(self.y_input.text())
+            w = int(self.width_input.text())
+            h = int(self.height_input.text())
+            return x, y, w, h
+        except ValueError:
+            raise ValueError("Не удалось получить координаты ни из имени файла, ни из полей ввода")

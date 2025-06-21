@@ -1,4 +1,4 @@
-# main.py
+# mainn.py
 
 import sys
 from PyQt5.QtWidgets import QApplication
@@ -7,6 +7,8 @@ from ui.main_window import AlbionHelperMainWindow  # Здесь уже есть 
 from utils.logger import setup_logger
 from datetime import datetime
 import atexit
+
+
 
 
 def main():

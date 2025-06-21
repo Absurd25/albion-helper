@@ -33,6 +33,8 @@ __pycache__
 *.bak
 *.csv
 *.log
+*.png
+*.txt
 
 # OS generated files
 .DS_Store
@@ -40,6 +42,7 @@ Thumbs.db
 
 # User-specific config (optional)
 /config/local_settings.py
+/all_file_to_txt/mainn.py
 
 # file
 read_json.py
