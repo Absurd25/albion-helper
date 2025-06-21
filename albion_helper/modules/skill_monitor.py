@@ -1,3 +1,4 @@
-# modules/skill_monitor.py
+"""
+Module description
+"""
 
-# ничего нет

@@ -3,7 +3,7 @@ import os
 # Основные директории и файлы
 structure = {
     "": [
-        "mainn.py",
+        "main.py",
     ],
     "config": [
         "__init__.py",
