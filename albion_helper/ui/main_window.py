@@ -16,6 +16,14 @@ import time
 from PyQt5.QtCore import QTimer
 from datetime import datetime
 
+
+from ui.auto_template_food import FoodEffectPreviewWindow
+from ui.auto_food_mode_window import AutoFoodModeWindow
+
+from utils.paths import TEMP_DIR, LOGS_DIR, TEMPLATES_DIR, EFFECT_TEMPLATES_JSON, FOOD_TEMPLATES_JSON, ensure_directories
+
+
+
 # Импорт модулей
 from modules.screenshot_handler import capture_screen, resize_image, save_effect_template, find_image_difference
 from modules.food_processor import process_food_difference
@@ -37,7 +45,7 @@ class AlbionHelperMainWindow(QWidget):
         self.start_time = datetime.now()
         self.template_1_path = ""
         self.template_2_path = ""
-        self.temp_dir = "data/templates/temp"
+        self.temp_dir = TEMP_DIR
         self.last_food_effect = None
         self.resize(800, 600)
 
@@ -52,7 +60,7 @@ class AlbionHelperMainWindow(QWidget):
         self.template_2_path = ""
         self.found_changes = []
         self.change_index = 0
-        self.temp_dir = "data/templates/temp"
+        self.temp_dir = "../data/data/templates/temp"
         os.makedirs(self.temp_dir, exist_ok=True)
 
         # Загрузка настроек
@@ -159,9 +167,9 @@ class AlbionHelperMainWindow(QWidget):
 
         self.save_region_button = QPushButton("✅ Сохранить область")
         self.save_template_button = QPushButton("💾 Сохранить как темплейт")
-        self.auto_food_button = QPushButton("🍱 Авто-режим: Еда")
-
-        self.add_food_template_button = QPushButton("💾 Добавить авто-темплейт еды")
+        self.auto_food_button = QPushButton("🍱 Режим Авто-Еда")
+        self.auto_food_button.clicked.connect(self.open_auto_food_mode_window)
+        self.add_food_template_button = QPushButton("💾 Авто-Добавление темплейтов еды")
         self.add_food_template_button.clicked.connect(self.start_auto_food_mode)
 
         # --- Добавляем все кнопки в layout ---
@@ -279,7 +287,7 @@ class AlbionHelperMainWindow(QWidget):
         self.status_label.setText(f"💾 Темплейт сохранён: {filename}")
 
     def save_template_data(self, x, y, width, height, label):
-        template_dir = "data/templates/effects"
+        template_dir = "../data/data/templates/effects"
         os.makedirs(template_dir, exist_ok=True)
         template_file = os.path.join(template_dir, "region_templates.json")
 
@@ -322,7 +330,7 @@ class AlbionHelperMainWindow(QWidget):
         """
         Сохраняет изображение эффекта еды и JSON с координатами
         """
-        food_dir = "data/templates/food"
+        food_dir = "../data/data/templates/food"
         os.makedirs(food_dir, exist_ok=True)
 
         filename = f"effect_{label.lower().replace(' ', '_')}_{width}x{height}.png"
@@ -621,147 +629,6 @@ class AlbionHelperMainWindow(QWidget):
         else:
             self.status_label.setText("✅ Все изменения просмотрены")
 
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QMessageBox
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap, QImage
-import cv2
-import os
-import json
-
-
-class FoodEffectPreviewWindow(QDialog):
-    def __init__(self, image_path, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Предпросмотр эффекта еды")
-        self.image_path = image_path
-        self.parent = parent  # Чтобы получить x, y области
-
-        # Начальный размер окна
-        self.resize(400, 300)
-
-        # Минимальный размер окна
-        self.setMinimumSize(300, 200)
-
-        # Инициализация интерфейса
-        self.init_ui()
-
-    def init_ui(self):
-        layout = QVBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)
-
-        # Превью изображения
-        self.image_label = QLabel()
-        self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setStyleSheet("background-color: #f0f0f0; border: 1px solid #ccc;")
-        layout.addWidget(self.image_label, stretch=1)  # stretch=1 — занимает всё доступное пространство
-
-        # Поле ввода имени
-        self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("Введите имя темплейта")
-        layout.addWidget(QLabel("Имя темплейта:"))
-        layout.addWidget(self.name_input)
-
-        # Кнопки
-        btn_layout = QHBoxLayout()
-        save_btn = QPushButton("✅ Сохранить")
-        cancel_btn = QPushButton("❌ Не сохранять")
-
-        save_btn.clicked.connect(self.save_effect)
-        cancel_btn.clicked.connect(self.reject)
-
-        btn_layout.addWidget(save_btn)
-        btn_layout.addWidget(cancel_btn)
-
-        layout.addLayout(btn_layout)
-        self.setLayout(layout)
-
-        # Загружаем изображение
-        self.load_image()
-
-    def load_image(self):
-        """Загружает изображение и масштабирует его под размер QLabel"""
-        img = cv2.imread(self.image_path)
-        if img is None:
-            QMessageBox.critical(self, "Ошибка", "Не удалось загрузить изображение.")
-            self.close()
-            return
-
-        h, w = img.shape[:2]
-        available_size = self.image_label.size()
-        scaling_factor = min(
-            available_size.width() / w,
-            available_size.height() / h
-        )
-        new_size = (int(w * scaling_factor), int(h * scaling_factor))
-        resized_img = cv2.resize(img, new_size, interpolation=cv2.INTER_AREA)
-
-        q_img = QImage(resized_img.data, resized_img.shape[1], resized_img.shape[0],
-                       resized_img.strides[0], QImage.Format_BGR888)
-        pixmap = QPixmap.fromImage(q_img)
-        self.image_label.setPixmap(pixmap)
-
-    def resizeEvent(self, event):
-        """Обновляем изображение при изменении размера окна"""
-        self.load_image()
-        super().resizeEvent(event)
-
-    def reject(self):
-        """Действие при нажатии 'Не сохранять'"""
-        try:
-            os.remove(self.image_path)
-        except Exception as e:
-            print(f"❌ Ошибка удаления файла: {e}")
-        super().reject()
-
-    def save_effect(self):
-        """Действие при нажатии 'Сохранить'"""
-        user_name = self.name_input.text().strip()
-        if not user_name:
-            QMessageBox.warning(self, "Ошибка", "Введите имя для темплейта")
-            return
-
-        food_dir = "data/templates/food"
-        os.makedirs(food_dir, exist_ok=True)
-
-        effect_filename = f"effect_{user_name}.png"
-        full_path = os.path.join(food_dir, effect_filename)
-        original_img = cv2.imread(self.image_path)
-
-        if original_img is None:
-            QMessageBox.critical(self, "Ошибка", "Не удалось загрузить изображение для сохранения.")
-            self.reject()
-            return
-
-        cv2.imwrite(full_path, original_img)
-
-        # Сохраняем данные в JSON
-        template_file = os.path.join(food_dir, "food_templates.json")
-        new_data = {
-            "name": user_name,
-            "label": user_name,
-            "template": effect_filename,
-            "x": self.parent.x if self.parent else 0,
-            "y": self.parent.y if self.parent else 0,
-            "width": original_img.shape[1],
-            "height": original_img.shape[0]
-        }
-
-        if os.path.exists(template_file):
-            try:
-                with open(template_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-            except json.JSONDecodeError:
-                data = []
-        else:
-            data = []
-
-        exists = any(item["name"] == user_name for item in data)
-        if exists:
-            QMessageBox.warning(self, "Ошибка", "Темплейт с таким именем уже существует")
-            return
-
-        data.append(new_data)
-        with open(template_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4, ensure_ascii=False)
-
-        self.accept()
+    def open_auto_food_mode_window(self):
+        self.auto_food_window = AutoFoodModeWindow(parent=self)
+        self.auto_food_window.show()

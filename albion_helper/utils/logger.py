@@ -1,11 +1,9 @@
-# albion_helper/utils/logger.py
-
 import os
 from datetime import datetime
 import logging
+from .paths import (TEMP_DIR, LOGS_DIR, TEMPLATES_DIR, EFFECT_TEMPLATES_JSON, FOOD_TEMPLATES_JSON, ensure_directories)
 
-
-def setup_logger(base_log_dir="logs"):
+def setup_logger(base_log_dir=LOGS_DIR):
     """
     Настраивает логгер, который пишет логи в папку по дате запуска
     Пример: logs/2025-06-15/app_12-30.log
