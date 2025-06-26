@@ -1,5 +1,3 @@
-# albion_helper/modules/screenshot_handler.py
-
 import mss
 import numpy as np
 import cv2

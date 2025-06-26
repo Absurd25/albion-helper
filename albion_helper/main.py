@@ -1,3 +1,5 @@
+import config
+
 import sys
 from PyQt5.QtWidgets import QApplication
 from datetime import datetime
@@ -14,6 +16,7 @@ import warnings
 
 def main():
     logger = setup_logger()
+    config.load_settings()
     logger.info("🚀 Программа запущена")
     app = QApplication(sys.argv)
     # Передаем логгер в существующий класс из main_window.py

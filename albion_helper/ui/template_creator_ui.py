@@ -1,5 +1,3 @@
-# albion_helper/ui/template_creator_ui.py
-
 from PyQt5.QtWidgets import QWidget, QLabel
 
 class TemplateCreatorUI(QWidget):

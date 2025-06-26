@@ -1,5 +1,3 @@
-# albion_helper/ui/main_window.py
-
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QComboBox,
@@ -19,14 +17,14 @@ from datetime import datetime
 
 from ui.auto_template_food import FoodEffectPreviewWindow
 from ui.auto_food_mode_window import AutoFoodModeWindow
-
-from utils.paths import TEMP_DIR, LOGS_DIR, TEMPLATES_DIR, EFFECT_TEMPLATES_JSON, FOOD_TEMPLATES_JSON, ensure_directories
-
-
-
+# Импорт утилит
+from utils.paths import ROOT_DIR, TEMP_DIR, LOGS_DIR, TEMPLATES_DIR, EFFECT_TEMPLATES_JSON, FOOD_TEMPLATES_JSON, ensure_directories
 # Импорт модулей
 from modules.screenshot_handler import capture_screen, resize_image, save_effect_template, find_image_difference
 from modules.food_processor import process_food_difference
+
+
+
 
 def resource_path(relative_path):
     """ Для корректного поиска ресурсов внутри .exe """
@@ -60,7 +58,7 @@ class AlbionHelperMainWindow(QWidget):
         self.template_2_path = ""
         self.found_changes = []
         self.change_index = 0
-        self.temp_dir = "../data/data/templates/temp"
+        self.temp_dir = TEMP_DIR
         os.makedirs(self.temp_dir, exist_ok=True)
 
         # Загрузка настроек
@@ -86,9 +84,14 @@ class AlbionHelperMainWindow(QWidget):
         self.region_combo = QComboBox()
         self.region_combo.addItems([
             "Область эффектов персонажа",
-            "Слот еды",
+            "Оружие Q",
+            "Оружие W",
+            "Оружие E",
             "Куртка (R)",
-            "Шлем (D)"
+            "Шлем (D)",
+            "Тапки (F)",
+            "Слот зелий",
+            "Слот еды"
         ])
 
         self.x_input = QLineEdit()
@@ -252,7 +255,7 @@ class AlbionHelperMainWindow(QWidget):
             self.status_label.setText("Ошибка: все поля должны быть числами.")
             return
 
-        config_path = resource_path(os.path.join("config", "settings.json"))
+        config_path = resource_path(os.path.join(ROOT_DIR, "config", "settings.json"))
         if os.path.exists(config_path):
             with open(config_path, "r") as f:
                 data = json.load(f)
@@ -287,7 +290,7 @@ class AlbionHelperMainWindow(QWidget):
         self.status_label.setText(f"💾 Темплейт сохранён: {filename}")
 
     def save_template_data(self, x, y, width, height, label):
-        template_dir = "../data/data/templates/effects"
+        template_dir = TEMPLATES_DIR
         os.makedirs(template_dir, exist_ok=True)
         template_file = os.path.join(template_dir, "region_templates.json")
 
@@ -330,7 +333,7 @@ class AlbionHelperMainWindow(QWidget):
         """
         Сохраняет изображение эффекта еды и JSON с координатами
         """
-        food_dir = "../data/data/templates/food"
+        food_dir = os.path.join(ROOT_DIR, "food")
         os.makedirs(food_dir, exist_ok=True)
 
         filename = f"effect_{label.lower().replace(' ', '_')}_{width}x{height}.png"
@@ -506,7 +509,7 @@ class AlbionHelperMainWindow(QWidget):
         return 0, 0, 80, 80
 
     def load_settings(self):
-        config_path = resource_path(os.path.join("config", "settings.json"))
+        config_path = resource_path(os.path.join(ROOT_DIR, "config", "settings.json"))
         if os.path.exists(config_path):
             with open(config_path, "r", encoding="utf-8") as f:
                 try:
@@ -578,7 +581,7 @@ class AlbionHelperMainWindow(QWidget):
         reply = QMessageBox.information(
             self,
             "Первый скриншот",
-            "Нажмите OK, чтобы сделать первый скриншот (без еды)",
+            "Нажмите OK, чтобы сделать первый скриншот (без еды для более корректной работы)",
             QMessageBox.Ok | QMessageBox.Cancel
         )
         if reply == QMessageBox.Ok:
@@ -608,5 +611,23 @@ class AlbionHelperMainWindow(QWidget):
             self.status_label.setText("✅ Все изменения просмотрены")
 
     def open_auto_food_mode_window(self):
+        ensure_directories()
+
         self.auto_food_window = AutoFoodModeWindow(parent=self)
         self.auto_food_window.show()
+        """
+        app = QApplication(sys.argv)
+        window = AutoFoodModeWindow()
+        window.show()
+        sys.exit(app.exec_())
+        """
+
+def main():
+    app = QApplication(sys.argv)
+    window = AlbionHelperMainWindow()
+    window.open_auto_food_mode_window()
+    sys.exit(app.exec_())
+
+if __name__ == "__main__":
+    ensure_directories()
+    main()

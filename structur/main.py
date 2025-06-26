@@ -18,7 +18,7 @@ structure = {
     "modules": [
         "__init__.py",
         "screenshot_handler.py",
-        "template_generator.py",
+        "template_matcher.py",
         "image_comparer.py",
         "skill_monitor.py",
         "food_detector.py"
