@@ -11,7 +11,7 @@ import os
 import numpy as np
 import sys
 
-from paths import ROOT_DIR
+from utils.paths import ROOT_DIR
 #
 from utils.paths import DATA_DIR, TEMPLATES_DIR
 #

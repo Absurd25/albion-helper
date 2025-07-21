@@ -84,14 +84,14 @@ class AlbionHelperMainWindow(QWidget):
         self.region_combo = QComboBox()
         self.region_combo.addItems([
             "Область эффектов персонажа",
-            "Оружие Q",
-            "Оружие W",
-            "Оружие E",
+            "Оружие (Q)",
+            "Оружие (W)",
+            "Оружие (E)",
             "Куртка (R)",
             "Шлем (D)",
             "Тапки (F)",
-            "Слот зелий",
-            "Слот еды"
+            "Слот зелий (1)",
+            "Слот еды (2)"
         ])
 
         self.x_input = QLineEdit()
@@ -165,29 +165,38 @@ class AlbionHelperMainWindow(QWidget):
 
         # === Панель с кнопками (статичная внизу) ===
         button_panel = QWidget()
-        button_panel.setFixedHeight(60*2)
-        button_layout_template = QHBoxLayout()
-        button_layout_automod = QHBoxLayout()
+        button_panel.setFixedHeight(60*2-40)  # Увеличим высоту для двух строк
 
+        # Основной layout для панели (вертикальный)
+        main_button_layout = QVBoxLayout()
+
+        # --- Первая строка кнопок ---
+        button_layout_template = QHBoxLayout()
         self.save_region_button = QPushButton("✅ Сохранить область")
         self.save_template_button = QPushButton("💾 Сохранить как темплейт")
         self.add_food_template_button = QPushButton("💾 Авто-Добавление темплейтов еды")
         self.add_food_template_button.clicked.connect(self.start_auto_food_mode)
 
+        button_layout_template.addWidget(self.save_region_button)
+        button_layout_template.addWidget(self.save_template_button)
+        button_layout_template.addWidget(self.add_food_template_button)
 
+        # --- Вторая строка кнопок ---
+        button_layout_automod = QHBoxLayout()
         self.auto_food_button = QPushButton("🍱 Режим Авто-Еда")
         self.auto_food_button.clicked.connect(self.open_auto_food_mode_window)
 
-        # --- Добавляем все кнопки в layout ---
-        button_layout_template.addWidget(self.save_region_button)
-        button_layout_template.addWidget(self.save_template_button)
+        self.auto_jacket_button = QPushButton("🍱 Режим Авто-Куртка")
+
         button_layout_automod.addWidget(self.auto_food_button)
-        button_layout_template.addWidget(self.add_food_template_button)
+        button_layout_automod.addWidget(self.auto_jacket_button)
+
+        # --- Добавляем оба layout в основной ---
+        main_button_layout.addLayout(button_layout_template)
+        main_button_layout.addLayout(button_layout_automod)
 
         # --- Устанавливаем layout на панель ---
-        button_panel.setLayout(button_layout_template)
-        button_panel.setLayout(button_layout_automod)
-
+        button_panel.setLayout(main_button_layout)
 
 
         # === Статус режима еды ===
@@ -280,6 +289,9 @@ class AlbionHelperMainWindow(QWidget):
             json.dump(data, f, indent=4)
 
         self.status_label.setText(f"✅ Сохранено: {region_name}")
+
+        self.settings_data = self.load_settings()
+        self.apply_region_settings(self.region_combo.currentText())
 
     def save_template(self):
         region_name = self.region_combo.currentText()
