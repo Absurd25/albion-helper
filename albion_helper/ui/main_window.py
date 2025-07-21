@@ -165,27 +165,33 @@ class AlbionHelperMainWindow(QWidget):
 
         # === Панель с кнопками (статичная внизу) ===
         button_panel = QWidget()
-        button_panel.setFixedHeight(60)
-        button_layout = QHBoxLayout()
+        button_panel.setFixedHeight(60*2)
+        button_layout_template = QHBoxLayout()
+        button_layout_automod = QHBoxLayout()
 
         self.save_region_button = QPushButton("✅ Сохранить область")
         self.save_template_button = QPushButton("💾 Сохранить как темплейт")
-        self.auto_food_button = QPushButton("🍱 Режим Авто-Еда")
-        self.auto_food_button.clicked.connect(self.open_auto_food_mode_window)
         self.add_food_template_button = QPushButton("💾 Авто-Добавление темплейтов еды")
         self.add_food_template_button.clicked.connect(self.start_auto_food_mode)
 
+
+        self.auto_food_button = QPushButton("🍱 Режим Авто-Еда")
+        self.auto_food_button.clicked.connect(self.open_auto_food_mode_window)
+
         # --- Добавляем все кнопки в layout ---
-        button_layout.addWidget(self.save_region_button)
-        button_layout.addWidget(self.save_template_button)
-        button_layout.addWidget(self.auto_food_button)
-        button_layout.addWidget(self.add_food_template_button)
+        button_layout_template.addWidget(self.save_region_button)
+        button_layout_template.addWidget(self.save_template_button)
+        button_layout_automod.addWidget(self.auto_food_button)
+        button_layout_template.addWidget(self.add_food_template_button)
 
         # --- Устанавливаем layout на панель ---
-        button_panel.setLayout(button_layout)
+        button_panel.setLayout(button_layout_template)
+        button_panel.setLayout(button_layout_automod)
+
+
 
         # === Статус режима еды ===
-        self.food_mode_label = QLabel("🍱 Режим еды: выключен")
+        self.food_mode_label = QLabel("🍱 Режим авто-еды: выключен")
         self.food_mode_label.setStyleSheet("font-weight: bold; color: gray;")
         main_layout.addWidget(self.food_mode_label, alignment=Qt.AlignLeft)
 
@@ -612,9 +618,18 @@ class AlbionHelperMainWindow(QWidget):
 
     def open_auto_food_mode_window(self):
         ensure_directories()
-
         self.auto_food_window = AutoFoodModeWindow(parent=self)
         self.auto_food_window.show()
+
+    def update_food_mode_status(self, is_active):
+        if is_active:
+            self.food_mode_label.setText("🍱 Режим авто-еды: включен")
+            self.food_mode_label.setStyleSheet("font-weight: bold; color: green;")
+        else:
+            self.food_mode_label.setText("🍱 Режим авто-еды: выключен")
+            self.food_mode_label.setStyleSheet("font-weight: bold; color: gray;")
+
+
         """
         app = QApplication(sys.argv)
         window = AutoFoodModeWindow()

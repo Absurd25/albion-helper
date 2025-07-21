@@ -24,6 +24,7 @@ from utils.logger import setup_logger
 class AutoFoodModeWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.main_window = parent
         self.setWindowTitle("Albion Helper — Авто-режим: Еда")
         self.resize(600, 600)
         self.setFixedSize(1300, 400)  # Фиксированный размер окна
@@ -242,11 +243,19 @@ class AutoFoodModeWindow(QDialog):
             self.status_label.setText("Авто-прохватка: ✅ Активен")
             self.status_label.setStyleSheet("font-size: 18px; font-weight: bold; color: green;")
             self.toggle_button.setText("🔴 Выключить авто-режим")
+
+            if self.main_window:
+                self.main_window.update_food_mode_status(True)
+
         else:
             self.timer.stop()
             self.status_label.setText("Авто-прохватка: ❌ Выключен")
             self.status_label.setStyleSheet("font-size: 18px; font-weight: bold; color: red;")
             self.toggle_button.setText("🟢 Включить авто-режим")
+
+            if self.main_window:
+                self.main_window.update_food_mode_status(False)
+
 
     def resizeEvent(self, event):
         self.update_preview()
